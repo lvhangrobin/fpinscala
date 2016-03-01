@@ -37,7 +37,7 @@ trait Monad[M[_]] extends Functor[M] {
     flatMap(ma)(a => map(mb)(b => f(a, b)))
 
   def sequence[A](lma: List[M[A]]): M[List[A]] = lma match {
-    case ma::mas => map2(ma, sequence(mas))(_ :: _)//flatMap(ma)(a => map(sequence(mas))(a :: _))
+    case ma::mas => map2(ma, sequence(mas))(_ :: _)//use foldRight to avoid stack overflow
     case Nil => unit(Nil)
   }
 
@@ -57,10 +57,12 @@ trait Monad[M[_]] extends Functor[M] {
   def _flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] =
     compose[Unit, A, B](_ => ma, f)(())
 
-  def join[A](mma: M[M[A]]): M[A] = ???
+  def join[A](mma: M[M[A]]): M[A] =
+    flatMap(mma)(x => x)
 
   // Implement in terms of `join`:
-  def __flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = ???
+  def __flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] =
+    join(map(ma)(f))
 }
 
 case class Reader[R, A](run: R => A)
@@ -111,8 +113,10 @@ case class Id[A](value: A) {
 
 object Reader {
   def readerMonad[R] = new Monad[({type f[x] = Reader[R,x]})#f] {
-    def unit[A](a: => A): Reader[R,A] = ???
-    override def flatMap[A,B](st: Reader[R,A])(f: A => Reader[R,B]): Reader[R,B] = ???
+    def unit[A](a: => A): Reader[R,A] = Reader(_ => a)
+    override def flatMap[A,B](st: Reader[R,A])(f: A => Reader[R,B]): Reader[R,B] = Reader( r =>
+      f(st.run(r)).run(r)
+    )
   }
 }
 
