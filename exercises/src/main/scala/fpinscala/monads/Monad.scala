@@ -36,16 +36,26 @@ trait Monad[M[_]] extends Functor[M] {
   def map2[A,B,C](ma: M[A], mb: M[B])(f: (A, B) => C): M[C] =
     flatMap(ma)(a => map(mb)(b => f(a, b)))
 
-  def sequence[A](lma: List[M[A]]): M[List[A]] = ???
+  def sequence[A](lma: List[M[A]]): M[List[A]] = lma match {
+    case ma::mas => map2(ma, sequence(mas))(_ :: _)//flatMap(ma)(a => map(sequence(mas))(a :: _))
+    case Nil => unit(Nil)
+  }
 
-  def traverse[A,B](la: List[A])(f: A => M[B]): M[List[B]] = ???
+  def traverse[A,B](la: List[A])(f: A => M[B]): M[List[B]] =
+    sequence(la.map(f))
 
-  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = ???
+  def replicateM[A](n: Int, ma: M[A]): M[List[A]] =
+    sequence(List.fill(n)(ma))
 
-  def compose[A,B,C](f: A => M[B], g: B => M[C]): A => M[C] = ???
+  def filterM[A](ms: List[A])(f: A => M[Boolean]): M[List[A]] =
+    map2(unit(ms), traverse(ms)(f))((l1, l2) => l1.zip(l2).filter(_._2).map(_._1))
+
+  def compose[A,B,C](f: A => M[B], g: B => M[C]): A => M[C] =
+    (a: A) => flatMap(f(a))(g)
 
   // Implement in terms of `compose`:
-  def _flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = ???
+  def _flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] =
+    compose[Unit, A, B](_ => ma, f)(())
 
   def join[A](mma: M[M[A]]): M[A] = ???
 
@@ -62,15 +72,30 @@ object Monad {
       ma flatMap f
   }
 
-  val parMonad: Monad[Par] = ???
+  val parMonad: Monad[Par] = new Monad[Par]{
+    def unit[A](a: => A): Par[A] = Par.unit(a)
+    def flatMap[A, B](ma: Par[A])(f: A => Par[B]): Par[B] = ???
+  }
 
   def parserMonad[P[+_]](p: Parsers[P]): Monad[P] = ???
 
-  val optionMonad: Monad[Option] = ???
+  val optionMonad: Monad[Option] = new Monad[Option] {
+    def unit[A](a: => A) = Some(a)
+    def flatMap[A, B](ma: Option[A])(f: A => Option[B]): Option[B] =
+      ma flatMap f
+  }
 
-  val streamMonad: Monad[Stream] = ???
+  val streamMonad: Monad[Stream] = new Monad[Stream] {
+    def unit[A](a: => A): Stream[A] = a #:: Stream.empty[A]
+    def flatMap[A, B](ma: Stream[A])(f: A => Stream[B]): Stream[B] =
+      ma flatMap f
+  }
 
-  val listMonad: Monad[List] = ???
+  val listMonad: Monad[List] = new Monad[List] {
+    def unit[A](a: => A): List[A] = List(a)
+    def flatMap[A, B](ma: List[A])(f: A => List[B]): List[B] =
+      ma flatMap f
+  }
 
   def stateMonad[S] = ???
 
