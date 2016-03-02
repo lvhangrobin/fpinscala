@@ -100,9 +100,8 @@ object Monad {
   }
 
   def stateMonad[S] = new Monad[({type f[x] = State[S, x]})#f]{
-    def unit[A](a: => A) = State(s => (a, s))
-    def flatMap[A, B](sm: => State[S, A])(f: A => State[S, B]) =
-      sm flatMap f
+    def unit[A](a: => A): State[S, A] = State(s => (a, s))
+    override def flatMap[A, B](sm: State[S, A])(f: A => State[S, B]): State[S, B] = sm.flatMap(f)
   }
 
   val idMonad: Monad[Id] = new Monad[Id] {
