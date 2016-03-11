@@ -17,16 +17,53 @@ trait Stream[+A] {
     case Empty => None
     case Cons(h, t) => if (f(h())) Some(h()) else t().find(f)
   }
-  def take(n: Int): Stream[A] = sys.error("todo")
 
-  def drop(n: Int): Stream[A] = sys.error("todo")
+  def toList: List[A] = {
+    @annotation.tailrec
+    def go(acc: List[A], stream: Stream[A]): List[A] = this match {
+      case Cons(h, t) => go(acc :+ h(), t())
+      case _ => acc
+    }
 
-  def takeWhile(p: A => Boolean): Stream[A] = sys.error("todo")
+    go(List[A](), this)
+  }
 
-  def forAll(p: A => Boolean): Boolean = sys.error("todo")
+  def take(n: Int): Stream[A] = this match{
+    case Cons(h, t) if n >= 1 => cons(h(), t().take(n-1))
+    case _ => Empty
+  }
 
-  def headOption: Option[A] = sys.error("todo")
+  def drop(n: Int): Stream[A] = this match {
+    case Cons(h, t) if n >= 1 => t().drop(n - 1)
+    case Cons(h, t) => this
+    case _ => Empty
+  }
 
+  def takeWhile(p: A => Boolean): Stream[A] = this match {
+    case Cons(h, t) if p(h()) => cons(h(), t().takeWhile(p))
+    case _ => empty
+  }
+
+  def takeWhileViaFoldRight(p: A => Boolean): Stream[A] =
+    foldRight(empty[A]){case (a, acc) => if (p(a)) cons(a, acc) else empty }
+
+  def forAll(p: A => Boolean): Boolean =
+    this.foldRight(true)((a, b) => p(a) && b)
+
+  def headOption: Option[A] =
+    foldRight(None: Option[A])((a, b) => Some(a))
+
+  def map[B](f: A => B): Stream[B] =
+    foldRight(empty[B])((a, acc) => cons(f(a), acc))
+
+  def filter(f: A => Boolean): Stream[A] =
+    foldRight(empty[A])((a, acc) => if(f(a)) cons(a, acc) else acc)
+
+  def append[B >: A](s: => Stream[B]): Stream[B] =
+    foldRight(s)((a, acc) => cons(a, acc))
+
+  def flatMap[B](f: A => Stream[B]): Stream[B] =
+    foldRight(empty[B])((a, acc) => f(a).append(acc))
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
 
@@ -48,8 +85,15 @@ object Stream {
     if (as.isEmpty) empty 
     else cons(as.head, apply(as.tail: _*))
 
+  def constant[A](a: A): Stream[A] = {
+    lazy val as: Stream[A] = Cons(() => a, () => as)
+    as
+  }
+
   val ones: Stream[Int] = Stream.cons(1, ones)
-  def from(n: Int): Stream[Int] = sys.error("todo")
+  def from(n: Int): Stream[Int] =
+    Stream.cons(n, from(n+1))
+
 
   def unfold[A, S](z: S)(f: S => Option[(A, S)]): Stream[A] = sys.error("todo")
 }
