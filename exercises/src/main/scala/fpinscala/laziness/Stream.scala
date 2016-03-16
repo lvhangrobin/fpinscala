@@ -33,6 +33,11 @@ trait Stream[+A] {
     case _ => Empty
   }
 
+  def takeViaUnfold(n: Int): Stream[A] = unfold(this -> n){
+    case (Cons(h, t), n) if n >= 1 => Some(h() -> (t(), (n - 1)))
+    case _ => None
+  }
+
   def drop(n: Int): Stream[A] = this match {
     case Cons(h, t) if n >= 1 => t().drop(n - 1)
     case Cons(h, t) => this
@@ -42,6 +47,11 @@ trait Stream[+A] {
   def takeWhile(p: A => Boolean): Stream[A] = this match {
     case Cons(h, t) if p(h()) => cons(h(), t().takeWhile(p))
     case _ => empty
+  }
+
+  def takeWhileViaUnfold(p: A => Boolean): Stream[A] = unfold(this){
+    case Cons(h, t) if p(h()) => Some(h(), t())
+    case _ => None
   }
 
   def takeWhileViaFoldRight(p: A => Boolean): Stream[A] =
@@ -56,6 +66,11 @@ trait Stream[+A] {
   def map[B](f: A => B): Stream[B] =
     foldRight(empty[B])((a, acc) => cons(f(a), acc))
 
+  def mapViaUnfold[B](f: A => B): Stream[B] = unfold(this){
+    case Cons(h,t) => Some((f(h()), t()))
+    case _ => None
+  }
+
   def filter(f: A => Boolean): Stream[A] =
     foldRight(empty[A])((a, acc) => if(f(a)) cons(a, acc) else acc)
 
@@ -67,7 +82,34 @@ trait Stream[+A] {
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
 
-  def startsWith[B](s: Stream[B]): Boolean = sys.error("todo")
+  def zipWith[B,C](s2: Stream[B])(f: (A,B) => C): Stream[C] = unfold(this -> s2){
+    case (Cons(h, t), Cons(h1, t1)) => Some(f(h(), h1()), t() -> t1())
+    case _ => None
+  }
+
+  def zipAll[B](s2: Stream[B]): Stream[(Option[A], Option[B])] = unfold(this -> s2){
+    case (Empty, Empty) => None
+    case (Cons(h, t), Cons(h1, t1)) => Some(Some(h()) -> Some(h1()), t() -> t1())
+    case (Cons(h, t), Empty) => Some(Some(h()) -> None, t() -> empty)
+    case (Empty, Cons(h1, t1)) => Some(None -> Some(h1()), empty -> t1())
+  }
+
+  def startsWith[B](s: Stream[B]): Boolean =
+    zipAll(s)
+      .takeWhile(_._2.isDefined)
+      .forAll { case (s1, s2) => s1 == s2}
+
+  def tails: Stream[Stream[A]] = unfold(this){
+    case Cons(h, t) => Some(this, t())
+    case _ => None
+  } append empty[Stream[A]]
+
+  def scanRight[B](z: => B)(f: (A, => B) => B): Stream[B] =
+    foldRight(z -> empty[B]){ case (a, (ac, acc)) =>
+      lazy val ac1 = ac
+      lazy val acc1 = acc
+      (f(a, ac1) -> cons(f(a, ac1), acc1))
+    }._2
 }
 case object Empty extends Stream[Nothing]
 case class Cons[+A](h: () => A, t: () => Stream[A]) extends Stream[A]
