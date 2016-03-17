@@ -147,5 +147,12 @@ object State {
 
   def set[S](s: S): State[S, Unit] = State(_ => ((), s))
 
-  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = ???
+  def updateState(input: Input): Machine => Machine = ???
+
+  def simulateMachine(inputs: List[Input]): State[Machine, (Int, Int)] = 
+    for {
+      _ <- sequence(inputs.map(input => modify(updateState(input))))
+      s <- get
+    } yield s.candies -> s.coins
+
 }
